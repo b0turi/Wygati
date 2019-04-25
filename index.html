@@ -1,0 +1,1036 @@
+<html>
+<head>
+<script src="jquery.js"></script>
+<link href="bootstrap.min.css" rel="stylesheet">
+<link href="font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<script src="bootstrap.min.js"></script>
+<link rel="stylesheet" href="flatpickr.css">
+<script src="knockout.js"></script>
+<script src="flatpickr.js"></script>
+<script src="events.js"></script>
+<style>
+.calendar-part
+{
+	width:14%;
+	float: left; 
+	text-align:center; 
+	border: 1px #ddd solid; 
+	height: 500px;
+	margin-bottom: 10px;
+}
+.event
+{
+	position: absolute;
+	width: 90.81px;
+	background-color: #eef;
+	padding: 0px;
+	border: 1px solid #ccc;
+	border-radius: 2px;
+	overflow: hidden;
+}
+</style>
+<script>
+	//localStorage.setItem("eventCount",0);
+	function ViewModel()
+	{
+		var self = this;
+		self.eventTypes = [
+			{typeName: "Appointment", typeID: 0},
+			{typeName: "Assignment", typeID: 1},
+			{typeName: "Task", typeID: 2},
+			{typeName: "Wygati", typeID: 3}
+		];
+		self.eventName = ko.observable();
+		self.eventDesc = ko.observable();
+		self.dayStart = ko.observable("");
+		self.day = ko.observable();
+		self.eventType = ko.observable();
+		self.repeating = ko.observable(false);
+		self.repeatDays = ko.observableArray([]);
+		self.numReps = ko.observable();
+		self.sublist = ko.observable(false);
+		self.subtasks = ko.observableArray([]);
+		self.progressBar = ko.observable(false);
+		self.removeTask = function(task){
+			self.subtasks.remove(task);
+		}
+		self.addTask = function(){
+			self.subtasks.push({tName:"New Task",done: false});
+		}
+		self.canItRepeat = ko.computed(function() {
+			return (self.dayStart() != "" && self.eventType().typeID == 0 && self.repeating());
+		})
+	}
+	var vm = new ViewModel();
+</script>
+<title>WYGATI</title>
+</head>
+<body>
+	<div class="container">
+		<script>
+			var Tassignments = [];
+			var Tappointments = [];
+			var Ttasks = [];
+			var events = [];
+			var tempEvents = 0;
+			var Wassignments = [];
+			var Wappointments = [];
+			var Wtasks = [];
+			var wygati = [];
+			var wevents = [[],[],[],[],[],[],[]];
+			var days = ["S","M","T","W","T","F","S"];
+			var currentDate = new Date();
+			var beginningOfWeek = new Date();
+			var endOfWeek = new Date();
+			var checkedArray = [];
+			var nullCount = 0;
+			var tempNulls = 0;
+			var didSomething = false;
+			var circles = [];
+			var openCollapses = [];
+			function formatToMinutes(a)
+			{
+				if(a<10)
+					return "0"+a;
+				return a;
+			}
+			function gatherEvents()
+			{
+				openCollapses = [];
+				var collapses = $(".collapse").toArray();
+				for(i = 0;i<collapses.length;i++)
+					if(collapses[i].classList.contains('in'))
+						openCollapses.push(collapses[i].id);
+				$(function () {
+				  $('[data-toggle="popover"]').popover();
+				  $('[data-toggle="tooltip"]').tooltip();
+				});
+				var eventCount = localStorage.getItem("eventCount");
+				tempEvents = events.length;
+				events = [];
+				tempNulls = nullCount;
+				nullCount = 0;
+				for(i = 0;i<eventCount;i++)
+				{
+					if(localStorage.getItem("event"+(i+1)))
+					{
+						events.push(JSON.parse(localStorage.getItem("event"+(i+1))));
+						if(events[events.length-1] == null)
+							nullCount++;
+					}
+				}
+				if(events.length!=tempEvents||tempNulls!=nullCount||didSomething)
+				{
+					didSomething = false;
+					Tassignments = [];
+					Tappointments = [];
+					Ttasks = [];
+					Wassignments = [];
+					Wappointments = [];
+					Wtasks = [];
+					wygati = [];
+					circles = [];
+					//For the "Today's Agenda", need to gather all the events that are either tasks for today, appointments for today, or assigments due today or later
+					//And put them in their respective arrays
+					currentDate = new Date();
+					beginningOfWeek = new Date(currentDate.getTime());
+					beginningOfWeek.setDate(currentDate.getDate()-currentDate.getDay());
+					beginningOfWeek.setHours(0);
+					endOfWeek = new Date(currentDate.getTime());
+					endOfWeek.setDate(currentDate.getDate()+(6-currentDate.getDay()));
+					endOfWeek.setHours(23);
+					for(i = 0;i<events.length;i++)
+					{
+						if(events[i]!=null)
+						{
+							var date = new Date(events[i].day);
+							if(date.getTime()<beginningOfWeek.getTime()&&events[i].type!=3)
+								localStorage.setItem("event"+(i+1),null);
+							else    
+							{
+								if(events[i].type == 0)
+								{
+									var startDate = new Date(events[i].dayStart);
+									if(startDate.getDate()==currentDate.getDate()&&startDate.getMonth()==currentDate.getMonth()&&startDate.getFullYear()==currentDate.getFullYear())
+										Tappointments.push(events[i]);
+									if(startDate.getTime()>=beginningOfWeek.getTime()&&startDate.getTime()<=endOfWeek.getTime())
+										Wappointments.push(events[i]);
+								}
+								if(events[i].type == 1)
+								{
+									var dueDate = new Date(events[i].day);
+									if(dueDate.getTime()>currentDate.getTime())
+										Tassignments.push(events[i]);
+									if(dueDate.getTime()>=beginningOfWeek.getTime()&&dueDate.getTime()<=endOfWeek.getTime())
+										Wassignments.push(events[i]);
+								}
+								if(events[i].type == 2)
+								{
+									console.log(events[i]);
+
+									var startDate = new Date(events[i].day);
+									if(startDate.getDate()==currentDate.getDate()&&startDate.getMonth()==currentDate.getMonth()&&startDate.getFullYear()==currentDate.getFullYear())
+										Ttasks.push(events[i]);
+									if(startDate.getTime()>=beginningOfWeek.getTime()&&startDate.getTime()<=endOfWeek.getTime())
+										Wtasks.push(events[i]);
+								}
+								if(events[i].type == 3)
+									wygati.push(events[i]);
+							}
+						}
+					}
+					$("#agenda").html("");
+					$("#comp").html("");
+					var completedAnEvent = false;
+					var haveAnEvent = false;
+					//Print all the daily events to the "Today's Agenda" section, ordered by tasks, then assignments, then appointments
+					for(i = 0;i<Ttasks.length;i++)
+					{
+						var topVal = -45;
+						if(Ttasks[i].done)
+						{
+							completedAnEvent = true;
+							$("#comp").append('<div id="agenda'+Ttasks[i].id+'"><button onmouseover="addCheck('+Ttasks[i].id+')" onmouseout="removeCheck('+Ttasks[i].id+')" class="btn" onclick="deleteEvent('+Ttasks[i].id+')" style="position: absolute; background-color: #eee; left: -20px; margin-top: 6px; padding: 12px; border-radius: 5px 0px 0px 5px; border: 1px solid #ddd;" data-toggle="tooltip" data-placement="top" title="Delete Event"><h5 style="margin: 0px;"><i class="fa fa-trash"></i></h5></button></div><button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onmouseover="addCheck('+Ttasks[i].id+')" onmouseout="removeCheck('+Ttasks[i].id+')" onclick="fillEvent('+Ttasks[i].id+','+Ttasks[i].progress+')"data-target="#eventHighlight"><h4><i class="fa fa-check" style="padding-right:20px; top:2px;"></i><b><s>'+Ttasks[i].name+'</s></b></h4></button>');
+							removeCheck(Ttasks[i].id);
+						}
+						else{
+							haveAnEvent = true;
+							var htmlToAdd = '<div id="agenda'+Ttasks[i].id+'"><button onmouseover="addCheck('+Ttasks[i].id+')" onmouseout="removeCheck('+Ttasks[i].id+')" class="btn" onclick="completeEvent('+Ttasks[i].id+')" style="position: absolute; background-color: #eee; left: -20px; margin-top: 6px; padding: 12px; border-radius: 5px 0px 0px 5px; border: 1px solid #ddd;" data-toggle="tooltip" data-placement="top" title="Event Complete!"><h5 style="margin: 0px;"><i class="fa fa-check"></i></h5></button></div><button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onmouseover="addCheck('+Ttasks[i].id+')" onmouseout="removeCheck('+Ttasks[i].id+')" onclick="fillEvent('+Ttasks[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-check-square-o" style="padding-right:20px; top:2px;"></i><b>'+Ttasks[i].name+'</b></h4>';
+							
+							if(Ttasks[i].progress != undefined)
+							{
+								htmlToAdd += '<div class="progress" style="margin-bottom:10px;"><div class="progress-bar progress-bar-striped" role="progressbar" aria-valuenow="'+Ttasks[i].progress+'" aria-valuemin="0" aria-valuemax="100" style="width: '+Ttasks[i].progress+'%">'+Ttasks[i].progress+'%</div></div>';
+								topVal = -73;
+							}
+							htmlToAdd+= '</button>';
+							if(Ttasks[i].subtasks != undefined)
+							{
+								circles.push(Ttasks[i].id);
+								htmlToAdd += '<div class="btn" data-toggle="collapse" data-target="#col'+Ttasks[i].id+'" onclick="toggleArrow('+Ttasks[i].id+')" style="margin-top:'+topVal+'px; padding: 5px; font-size: 18pt; position: absolute; left: 420px;"><i id="arrow'+Ttasks[i].id+'" class="fa fa-chevron-circle-down"></i></div>';
+								htmlToAdd += '<div class="collapse" id="col'+Ttasks[i].id+'" style="margin:0px; padding: 0px;">';
+								for(k = 0;k<Ttasks[i].subtasks.length;k++)
+								{
+									if(!Ttasks[i].subtasks[k].done)
+										htmlToAdd += '<button onclick="completeSubTask('+Ttasks[i].id+','+k+')" class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i>'+Ttasks[i].subtasks[k].tName+'</button>';
+									else
+										htmlToAdd += '<div class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px; text-align: left;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i><s>'+Ttasks[i].subtasks[k].tName+'</s></div>';
+								}
+								htmlToAdd += '</div>';
+							}
+							$("#agenda").append(htmlToAdd);
+							removeCheck(Ttasks[i].id);
+						}
+					}
+					//Arrange today's appointments in order of their time
+					Tappointments.sort(dateSort);
+					for(i = 0;i<Tappointments.length;i++)
+					{
+						var startTime = new Date(Tappointments[i].dayStart);
+						var initTime = startTime.getHours()+":"+formatToMinutes(startTime.getMinutes())+" AM";
+						if(startTime.getHours()>12)
+							initTime = (startTime.getHours() - 12)+":"+formatToMinutes(startTime.getMinutes())+" PM";
+						if(startTime.getHours()==12) 
+							initTime = (startTime.getHours())+":"+formatToMinutes(startTime.getMinutes())+" PM";
+						var endTime = new Date(Tappointments[i].day);
+						var finTime = endTime.getHours()+":"+formatToMinutes(endTime.getMinutes())+" AM";
+						if(endTime.getHours()>12)
+							finTime = (endTime.getHours() - 12)+":"+formatToMinutes(endTime.getMinutes())+" PM";
+						if(endTime.getHours()==12)
+							finTime = (endTime.getHours())+":"+formatToMinutes(endTime.getMinutes())+" PM";
+						$("#agenda").append('<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+Tappointments[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-calendar" style="padding-right:20px; top:2px;"></i><b>'+Tappointments[i].name+'</b><span class="pull-right">'+initTime+' - '+finTime+'</span></h4></button>');
+						haveAnEvent = true;
+					}
+					Tassignments.sort(dueSort);
+					for(i = 0;i<Tassignments.length; i++)
+					{
+						var topVal = -45;
+						var timeDue = new Date(Tassignments[i].day)
+						var countdown = timeDue.getTime()-(new Date()).getTime();
+						var days = Math.floor(countdown/86400000);
+						countdown-=days*86400000;
+						var hours = Math.floor(countdown/3600000);
+						countdown-=hours*3600000;
+						var minutes = Math.floor(countdown/60000)+1;
+						var display = "";
+						if(days>0)
+							display+=days+" day(s), ";
+						if(hours>0)
+							display+=hours+" hour(s) and ";
+						display+=minutes+" minutes";
+						if(Tassignments[i].done)
+						{
+							completedAnEvent = true;
+							$("#comp").append('<div id="agenda'+Tassignments[i].id+'"><button onmouseover="addCheck('+Tassignments[i].id+')" onmouseout="removeCheck('+Tassignments[i].id+')" class="btn" onclick="deleteEvent('+Tassignments[i].id+')" style="position: absolute; background-color: #eee; left: -20px; margin-top: 6px; padding: 12px; border-radius: 5px 0px 0px 5px; border: 1px solid #ddd;" data-toggle="tooltip" data-placement="top" title="Delete Event"><h5 style="margin: 0px;"><i class="fa fa-trash"></i></h5></button></div><button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onmouseover="addCheck('+Tassignments[i].id+')" onmouseout="removeCheck('+Tassignments[i].id+')" onclick="fillEvent('+Tassignments[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-hourglass" style="padding-right:20px; top:2px;"></i><b><s>'+Tassignments[i].name+'</s></b></h4></button>');
+							removeCheck(Tassignments[i].id);
+						}
+						else
+						{
+							haveAnEvent = true;
+							var htmlToAdd = '<div id="agenda'+Tassignments[i].id+'"><button onmouseover="addCheck('+Tassignments[i].id+')" onmouseout="removeCheck('+Tassignments[i].id+')" class="btn" onclick="completeEvent('+Tassignments[i].id+')" style="position: absolute; background-color: #eee; left: -26px; margin-top: 11px; padding: 15px; border-radius: 5px 0px 0px 5px; border: 1px solid #ddd;" data-toggle="tooltip" data-placement="top" title="Event Complete!"><h4 style="margin: 0px;"><i class="fa fa-check"></i></h4></button></div><button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;';
+							if(days==0)
+								htmlToAdd+= 'background-color: #f99; color: #fff;'
+							htmlToAdd+= '" data-toggle="modal" onmouseover="addCheck('+Tassignments[i].id+')" onmouseout="removeCheck('+Tassignments[i].id+')" onclick="fillEvent('+Tassignments[i].id+')" data-target="#eventHighlight"><div style="font-size:8pt; text-align:center;">Due in '+display+'</div><h4><i class="fa fa-hourglass" style="padding-right:20px; top:2px;"></i><b>'+Tassignments[i].name+'</b></h4>';
+							
+							if(Tassignments[i].progress != undefined)
+							{
+								htmlToAdd += '<div class="progress" style="margin-bottom:10px;"><div class="progress-bar progress-bar-striped" role="progressbar" aria-valuenow="'+Tassignments[i].progress+'" aria-valuemin="0" aria-valuemax="100" style="width: '+Tassignments[i].progress+'%">'+Tassignments[i].progress+'%</div></div>';
+								topVal = -73;
+							}
+							htmlToAdd+= '</button>';
+							if(Tassignments[i].subtasks != undefined)
+							{
+								circles.push(Tassignments[i].id);
+								htmlToAdd += '<div class="btn" data-toggle="collapse" data-target="#col'+Tassignments[i].id+'" onclick="toggleArrow('+Tassignments[i].id+')" style="margin-top:'+topVal+'px; padding: 5px; font-size: 18pt; position: absolute; left: 420px;"><i id="arrow'+Tassignments[i].id+'" class="fa fa-chevron-circle-down"></i></div>';
+								htmlToAdd += '<div class="collapse" id="col'+Tassignments[i].id+'" style="margin:0px; padding: 0px;">';
+								for(k = 0;k<Tassignments[i].subtasks.length;k++)
+								{
+									if(!Tassignments[i].subtasks[k].done)
+										htmlToAdd += '<button onclick="completeSubTask('+Tassignments[i].id+','+k+')" class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i>'+Tassignments[i].subtasks[k].tName+'</button>';
+									else
+										htmlToAdd += '<div class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px; text-align: left;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i><s>'+Tassignments[i].subtasks[k].tName+'</s></div>';
+								}
+								htmlToAdd += '</div>';
+							}
+							$("#agenda").append(htmlToAdd);
+							removeCheck(Tassignments[i].id);
+						}
+					}
+					if(!haveAnEvent)
+						$("#agenda").append('<div class="list-group-item"><h4 style="text-align: center;">No Events! Sit back and relax.</h4></div>');
+					if(!completedAnEvent)
+						$("#comp").append('<div class="list-group-item"><h4 style="text-align: center;">Nothing done yet today. Get crackin\'!</h4></div>');
+					if(wygati.length>0)
+					{
+						wygati.sort(dateSort);
+						var dayDifference = Math.floor(((new Date()).getTime() - (new Date(wygati[0].dayStart)).getTime())/86400000);
+						document.getElementById("wygatiName").innerText = wygati[0].name;
+						document.getElementById("dayDiff").innerText = dayDifference + " Days";
+						$("#doneBut").off();
+						$("#doneBut").click(function(){
+							localStorage.setItem("event"+(wygati[0].id),null);
+							gatherEvents();
+						});
+					}else{
+						document.getElementById("wygatiName").innerText = 'Currently No Wygati Events';
+						document.getElementById("dayDiff").innerText = " -- ";
+					}
+							checkedArray = [];
+					for(p = 0;p<(Tassignments.length);p++)
+						checkedArray.push(false);
+				}
+				for(q = 0;q<openCollapses.length;q++)
+					$("#"+openCollapses[q]).addClass("in");
+			}
+			function toggleArrow(a,num)
+			{
+				if(num==undefined)
+				{
+					if($("#arrow"+a).hasClass("fa-chevron-circle-down")==true)
+					{
+						$("#arrow"+a).removeClass("fa-chevron-circle-down");
+						$("#arrow"+a).addClass("fa-chevron-circle-up");
+					}else
+					if($("#arrow"+a).hasClass("fa-chevron-circle-up"))
+					{
+						$("#arrow"+a).removeClass("fa-chevron-circle-up");
+						$("#arrow"+a).addClass("fa-chevron-circle-down");
+					}
+				}else{
+					if($("#arrow"+num+"o"+a).hasClass("fa-chevron-circle-down")==true)
+					{
+						$("#arrow"+num+"o"+a).removeClass("fa-chevron-circle-down");
+						$("#arrow"+num+"o"+a).addClass("fa-chevron-circle-up");
+					}else
+					if($("#arrow"+num+"o"+a).hasClass("fa-chevron-circle-up"))
+					{
+						$("#arrow"+num+"o"+a).removeClass("fa-chevron-circle-up");
+						$("#arrow"+num+"o"+a).addClass("fa-chevron-circle-down");
+					}
+				}
+			}
+			function dateSort(a,b)
+			{
+				var date1 = new Date(a.dayStart);
+				var date2 = new Date(b.dayStart);
+				if(date1.getTime()<date2.getTime())
+					return -1;
+				if(date1.getTime()>date2.getTime())
+					return 1;
+				return 0;
+			}
+			function dueSort(a,b)
+			{
+				var date1 = new Date(a.day);
+				var date2 = new Date(b.day);
+				if(date1.getTime()<date2.getTime())
+					return -1;
+				if(date1.getTime()>date2.getTime())
+					return 1;
+				return 0;
+			}
+			function importSort(a,b)
+			{
+				if(a.importance<b.importance)
+					return -1;
+				if(a.importance>b.importance)
+					return 1;
+				return 0;
+			}
+			setTimeout(setCalendar,1500);
+			setInterval(gatherEvents,1000);
+			function setCalendar()
+			{
+				wevents = [[],[],[],[],[],[],[]];
+				$("#calendar").html("");
+				for(i = 0;i<7;i++)
+				{
+					for(j = 0;j<Wassignments.length;j++)
+					{
+						var date = new Date(Wassignments[j].day);
+						if(date.getDay() == i&&!Wassignments[j].done)
+							wevents[i].push(Wassignments[j]);
+					}
+					for(j = 0;j<Wtasks.length;j++)
+					{
+						var date = new Date(Wtasks[j].day);
+						if(date.getDay() == i&&!Wtasks[j].done)
+							wevents[i].push(Wtasks[j]);
+					}
+					if(i>0&&i<6)
+					{
+						$("#calendar").append('<div class="calendar-part">');
+						$("#calendar").append('<button onclick="refill('+i+')" class="btn" style="text-align:left; position: absolute; width: 92.81px; border-radius:0px; height:50px;top:-50px; left:'+(92.81*i + 6)+'px; background-color:#bbb;"><div class="badge" style="margin-left: -5px;">'+wevents[i].length+'</div><h3 style="text-align: center; margin-top:-5px;">'+days[i]+'</h3></button>');
+					}
+					else if(i==0)
+					{
+						$("#calendar").append('<div class="calendar-part" style="margin-left: 6px; border-radius: 0px 0px 0px 5px;">');
+						$("#calendar").append('<button onclick="refill('+i+')" class="btn" style="text-align:left; position: absolute; width: 92.81px; border-radius: 5px 0px 0px 0px; height:50px;top:-50px; left:'+(92.81*i + 6)+'px; background-color:#bbb;"><div class="badge" style="margin-left: -5px;">'+wevents[i].length+'</div><h3 style="text-align: center; margin-top:-5px;">'+days[i]+'</h3></button>');
+					}
+					else
+					{
+						$("#calendar").append('<div class="calendar-part" style="border-radius: 0px 0px 5px 0px;">');
+						$("#calendar").append('<button onclick="refill('+i+')" class="btn" style="text-align:left; position: absolute; width: 92.81px; border-radius: 0px 05px 0px 0px; height:50px;top:-50px; left:'+(92.81*i + 6)+'px; background-color:#bbb;"><div class="badge" style="margin-left: -5px;">'+wevents[i].length+'</div><h3 style="text-align: center; margin-top:-5px;">'+days[i]+'</h3></button>');
+					}
+					for(j = 0;j<Wappointments.length;j++)
+					{
+						var date = new Date(Wappointments[j].dayStart);
+						var end = new Date(Wappointments[j].day);
+						var positioning = ((date.getHours()-8)*60+date.getMinutes())*(5/9);
+						var duration = end.getTime()-date.getTime();
+						duration/=60000;
+						var suffix = " AM";
+						if(date.getHours()>11)
+							suffix = " PM";
+						if(date.getHours()>12)
+							date.setHours(date.getHours()-12);
+						var minsFormatted = date.getMinutes()+"";
+						if(date.getMinutes()<10)
+							minsFormatted = "0"+minsFormatted;
+						var startFormatted = date.getHours()+":"+minsFormatted+suffix;
+						if(end.getHours()>11)
+							suffix = " PM";
+						else
+							suffix = " AM";
+						if(end.getHours()>12)
+							end.setHours(end.getHours()-12);
+						minsFormatted = end.getMinutes()+"";
+						if(end.getMinutes()<10)
+							minsFormatted = "0"+minsFormatted;
+						var endFormatted = end.getHours()+":"+minsFormatted+suffix;
+						
+						if(date.getDay() == i)
+						{
+							var bodyText = "<div>"+Wappointments[j].name+"<br/><b>"+startFormatted+" - "+endFormatted+"</b></div>";
+							$("#calendar").append('<div class="event" data-html="true" style="font-size: 10pt; height:'+Math.round(duration*(5/9))+'px; top:'+positioning+'px; left:'+(90.81*i+(2*i+1)+6)+'px;" data-toggle="popover" data-trigger="hover" data-placement="top" title="'+Wappointments[j].name+'" data-content="'+Wappointments[j].desc+'">'+bodyText+'</div>')
+						}
+					}
+					$(".calendar-part, .event").mousemove(function(e)
+					{
+						var y = e.pageY;
+						var x = e.pageX;
+						//positioning and formatting
+						var timeVal = (y-262)/500;
+						timeVal *= 900;
+						timeVal += 280;
+						var hour = Math.floor(timeVal/60);
+						var min = Math.floor(Math.round(timeVal%60,2)/5)*5;
+						var timeEnd = "AM";
+						if(hour>=12)
+							timeEnd = "PM";
+						if(hour>12)
+							hour-=12;
+						if(min<10)
+							min = "0"+min;
+						var timeCalc = hour+":"+min+" "+timeEnd;
+						document.getElementById("cbar").innerHTML = '<div class="badge" id="bag" style="position:relative">'+timeCalc+'</div>';
+						if(!collapseOpened)
+						{
+							document.getElementById("cbar").style.top = y-262;
+							document.getElementById("cbar").style.opacity = 1;
+							document.getElementById("bag").style.left = x - 930;
+						}
+						if(x - 930<0)
+							document.getElementById("bag").style.left = 0;
+					});
+					$(".calendar-part, .event").mouseleave(function(){
+						document.getElementById("cbar").style.opacity = 0;
+					});
+					$("#calendar").append('</div>');
+
+				}
+			}
+			var collapseOpened  = false;
+			var numSelected = 0;
+			function refill(a)
+			{
+				var dFormatted = (beginningOfWeek.getMonth()+1)+"/"+(beginningOfWeek.getDate()+a)+"/"+(beginningOfWeek.getFullYear())+" - Events";
+				$("#eventHeader").html(dFormatted);
+				allOfEm(wevents[a],"#eventsInMe", 2);
+				if(!collapseOpened)
+				{
+					$("#events").collapse('show');
+					collapseOpened = true;
+				}else if(collapseOpened&&numSelected==a)
+				{
+					$("#events").collapse('hide');
+					collapseOpened = false;
+				}
+				numSelected = a;
+			}
+			function addCheck(id)
+			{
+				document.getElementById("agenda"+id).style.opacity = 1;
+			}
+			function removeCheck(id)
+			{
+				document.getElementById("agenda"+id).style.opacity = 0;
+			}
+			function completeEvent(id)
+			{
+				var newEvent = JSON.parse(localStorage.getItem("event"+id));
+				newEvent.done = true;
+				didSomething = true;
+				localStorage.setItem("event"+id, JSON.stringify(newEvent));
+				gatherEvents();
+				setCalendar();
+				allOfEm(events, "#basin", 3);
+			}
+			function completeSubTask(id,subID)
+			{
+				var eve = events[id-1];
+				eve.subtasks[subID].done = true;
+				localStorage.setItem("event"+id,JSON.stringify(eve));
+				didSomething = true;
+				gatherEvents();
+			}
+			function deleteEvent(id)
+			{
+				localStorage.setItem("event"+(id),null);
+				gatherEvents();
+				setCalendar();
+				allOfEm(events, "#basin", 3);
+			}
+			function fillEvent(objID)
+			{
+				$("#allEvents").modal('hide');
+				var object = events[objID-1];
+				$("#evnam").html('<b>'+object.name+'</b>');
+				$("#evdes").val(object.desc);
+				$("#evglyph").removeClass();
+				var dayStart = new Date(object.dayStart);
+				var day = new Date(object.day);
+				var d1Formatted = (dayStart.getMonth()+1)+"/"+(dayStart.getDate())+"/"+dayStart.getFullYear()+" - "+dayStart.getHours()+":"+formatToMinutes(dayStart.getMinutes())+" AM";
+				if(dayStart.getHours()>12)
+					d1Formatted = (dayStart.getMonth()+1)+"/"+(dayStart.getDate())+"/"+dayStart.getFullYear()+" - "+(dayStart.getHours()-12)+":"+formatToMinutes(dayStart.getMinutes())+" PM";
+				if(dayStart.getHours()==12)
+					d1Formatted = (dayStart.getMonth()+1)+"/"+(dayStart.getDate())+"/"+dayStart.getFullYear()+" - "+(dayStart.getHours())+":"+formatToMinutes(dayStart.getMinutes())+" PM";
+				var d2Formatted = (day.getMonth()+1)+"/"+(day.getDate())+"/"+day.getFullYear()+" - "+day.getHours()+":"+formatToMinutes(day.getMinutes())+" AM";
+				if(day.getHours()>12)
+					d2Formatted = (day.getMonth()+1)+"/"+(day.getDate())+"/"+day.getFullYear()+" - "+(day.getHours()-12)+":"+formatToMinutes(day.getMinutes())+" PM";
+				if(day.getHours()==12)
+					d2Formatted = (day.getMonth()+1)+"/"+(day.getDate())+"/"+day.getFullYear()+" - "+(day.getHours())+":"+formatToMinutes(day.getMinutes())+" PM";
+				if(object.dayStart!=undefined)
+				{
+					$("#evdat1L").show();
+					$("#evdat1").show().val(dayStart);
+				}
+				else
+				{
+					$("#evdat1L").hide();
+					$("#evdat1").hide();
+				}
+				if(object.day!=undefined)
+				{
+					$("#evdat2L").show();
+					$("#evdat2").show().val(day);
+				}
+				else
+				{
+					$("#evdat2L").hide();
+					$("#evdat2").hide();
+				}
+				if(object.importance!=undefined)
+				{
+					$("#evimp").show().val(object.importance-1);
+					$("#evimpL").show();
+				}
+				else
+				{
+					$("#evimpL").hide();
+					$("#evimp").hide();
+				}
+				if(object.progress!=undefined)
+				{
+					$("#evprog").show().val(object.progress);
+					$("#evprogL").show();
+				}
+				else
+				{
+					$("#evprogL").hide();
+					$("#evprog").hide();
+				}
+				if(object.subtasks!=undefined)
+				{
+					$("#evsubL").show();
+					$("#evsub").show();
+					vm.sublist(true);
+					vm.subtasks(object.subtasks);
+					console.log(vm.sublist());
+				}else{
+					$("#evsubL").hide();
+					$("#evsub").hide();
+				}
+				$("#delBut").off();
+				$("#okBut").off();
+				$("#delBut").click(function(){
+					deleteEvent(objID);
+				});
+				$("#okBut").click(function(){
+					object.desc = $("#evdes").val();
+					if(object.day!=undefined)
+						object.day = $("#evdat2").val();
+					if(object.dayStart!=undefined)
+						object.dayStart = $("#evdat1").val();
+					if(object.importance!=undefined)
+						object.importance = $("#evimp").val();
+					if(object.subtasks != undefined)
+						object.subtasks = vm.subtasks();
+					if(object.progress != undefined)
+						object.progress = $("#evprog").val();
+					localStorage.setItem("event"+(objID),JSON.stringify(object));
+					didSomething = true;
+					gatherEvents();
+					setCalendar();
+				});
+			}
+			function hideCollapse()
+			{
+				$("#events").collapse('hide');
+				collapseOpened = false;
+			}
+		</script>
+		
+
+		<!-- Main Page -->
+		<div class="jumbotron" style="margin-bottom:20px;">
+			<h1>Wygati - Time Management</h1>
+			<h3>Keeping it all together and keeping you sane.</h3>
+
+			<div class="btn-group btn-group-lg" role="group" style="float: right; margin: -20px;">
+				<button type="button" class="btn btn-default" data-toggle="modal" data-target="#setter">Create Event</button>
+				<button type="button" class="btn btn-default" data-toggle="modal" data-target="#allEvents" onclick="allOfEm(events,'#basin',3)">View All Events</button>
+			</div>
+		</div>
+		<div class="col-lg-5">
+			<div class="list-group-item" style="margin-left:10px; margin-right:10px; border-radius: 5px 5px 0px 0px; text-align:center; background-color: #eee;">
+				<h3 style="margin:5px;"><b>Today's Agenda</b></h3>
+			</div>
+			<div class="list-group" id="agenda">
+
+			</div> 
+			<div class="list-group-item" style="margin-left:10px; margin-right:10px; border-radius: 5px 5px 0px 0px; text-align:center; background-color: #eee;">
+				<h3 style="margin:5px;"><b>Completed Today</b></h3>
+			</div>
+			<div class="list-group" id="comp">
+			</div> 
+		</div>
+
+		<div class="col-lg-7 collapse panel panel-default" id="events" style="margin-bottom:0px;">
+			<button type="button" style="margin:20px;" class="close" onclick="hideCollapse()"><span aria-hidden="true">&times;</span></button>
+			<h3 style="text-align:center;" id="eventHeader"></h3>
+			<div id="eventsInMe" class="list-group">
+			</div>
+			<p>&nbsp;</p>
+		</div>
+
+		<div class="col-lg-7 panel panel-default" id="CalendarMain" style="height: 680px; overflow: auto;">
+			<h2 style="text-align:center;"><b>THIS WEEK</b></h2>
+				<div class="row" id="calendar" style="top:50px; position: relative;">
+				</div>
+				<div id="cbar" style="background-color: #f00; width:648px; height: 2px; opacity: 0; position: absolute; left: 6px; top: 112px; pointer-events: none; color: #f00;"></div>
+		</div>
+
+		<div class="col-lg-5 col-lg-offset-5 panel panel-default">
+			<h3>Wygati - When You Get Around To It</h3>
+			<div class="input-group" style="margin-bottom: 8px;">
+				<div id="wygatiName" class="form-control">Currently No Wygati Events</div>
+				<span class="input-group-addon" id="dayDiff"> -- </span>
+				<a class="input-group-addon" id="doneBut">Complete!</a>
+			</div>
+		</div>
+		v1.0
+	</div>
+	
+	<!-- View One Event -->
+	<div class="modal fade" id="eventHighlight" role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title"><span id="evglyph" class="fa fa-hourglass"></span>&nbsp;<span id="evnam"></span></b></h4>
+				</div>
+				<div class="modal-body panel" style="height:auto; overflow: auto;">
+					<textarea rows="3" class="form-control" id="evdes"></textarea>
+					<div class="col-lg-6">
+						<label id="evdat1L">Start Date</label>
+						<input class="flatpickr form-control" type="text" id="evdat1" placeholder="Select Date and Time...">
+						<label id="evdat2L">End Date</label>
+						<input class="flatpickr form-control" type="text" id="evdat2" placeholder="Select Date and Time...">
+					</div>
+					<div class="col-lg-6">
+						<label id="evprogL">Progress (0% - 100%)</label>
+						<input type="number" class="form-control" id="evprog" />
+						<label id="evimpL">Importance (1-5)</label>
+						<select class="form-control" id="evimp">
+							<option value="0">1 - Wouldn't be the end of the world if it fell through</option>
+							<option value="1">2 - Do it sooner rather than later</option>
+							<option value="2">3 - Better get this done</option>
+							<option value="3">4 - Crucial, don't mess up</option>
+							<option value="4">5 - Imperative to survival</option>
+						</select>
+						<label id="evsubL">Subtasks</label>
+						<div id="evsub">
+							<p>Provide an outline of the assignment or task to be checked off as a to-do list</p>
+							<div data-bind="foreach: subtasks">
+								<div class="input-group" style="margin:5px;">
+									<a class="btn btn-danger input-group-addon" style="padding-top:8px; padding-bottom: 8px;" data-bind="click:$root.removeTask"><i class="fa fa-trash"></i></a><input type="text" class="form-control" data-bind="value: tName" />
+								</div>
+							</div>
+							<button class="btn btn-success" data-bind="click: addTask"><i class="fa fa-plus"></i>&nbsp; Add Subtask</button>
+						</div>
+					</div>
+					<div>All changes made will be reflected permanently after hitting "OK"</div>
+				</div>
+				<button type="button" style="margin: 20px; margin-right: 0px;" class="btn btn-danger" id="delBut" data-dismiss="modal">Delete Event</button>
+				<button type="button" style="margin: 20px; float:right;" class="btn btn-primary" data-dismiss="modal" id="okBut">OK</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Create Event -->
+	<div class="modal fade" id="setter" role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="myModalLabel2"><b>New Event</b></h4>
+				</div>
+				<div class="modal-body" style="height:auto; overflow:auto;">
+					<label id="eNameL">Name of the Event</label>
+					<input id="eName" type="text" class="form-control" placeholder="Event Name" data-bind="value: eventName" />
+					<label>Brief Summary of the Event</label>
+					<textarea rows="3" class="form-control" wrap="hard" id="eDesc" data-bind="value: eventDesc"></textarea>
+					<div class="col-lg-6" style="height:auto; overflow:auto;">
+						<label>Event Type</label>
+						<select class="form-control" data-bind="options: eventTypes, value: eventType, optionsText: 'typeName'"></select>
+						<div data-bind="visible: eventType().typeID == 0"><input type="checkbox" data-bind="checked: repeating" /><label>&nbsp;Repetition</label></div>
+						<div data-bind="visible: (eventType().typeID>0&&eventType().typeID<3)">
+							<input type="checkbox" data-bind="checked: sublist" /><label>&nbsp;Sublist</label>
+							<div data-bind="visible: sublist()">
+								<p>Provide an outline of the assignment or task to be checked off as a to-do list</p>
+								<div data-bind="foreach: subtasks">
+									<div class="input-group" style="margin:5px;">
+										<a class="btn btn-danger input-group-addon" style="padding-top:8px; padding-bottom: 8px;" data-bind="click:$root.removeTask"><i class="fa fa-trash"></i></a><input type="text" class="form-control" data-bind="value: tName" />
+									</div>
+								</div>
+								<button class="btn btn-success" data-bind="click: addTask"><i class="fa fa-plus"></i>&nbsp; Add Subtask</button>
+							</div><br/>
+							<input type="checkbox" data-bind="checked: progressBar" /><label data-toggle="tooltip" title="Can record % complete">&nbsp; Progress</label>
+						</div>
+						<div data-bind="visible: canItRepeat()">
+							How often will this event repeat? <br/>
+							<input type="checkbox" value="0" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Sunday</label><br/>
+							<input type="checkbox" value="1" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Monday</label><br/>
+							<input type="checkbox" value="2" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Tuesday</label><br/>
+							<input type="checkbox" value="3" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Wednesday</label><br/>
+							<input type="checkbox" value="4" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Thursday</label><br/>
+							<input type="checkbox" value="5" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Friday</label><br/>
+							<input type="checkbox" value="6" data-bind="checked: repeatDays" /><label style="margin-left:10px;">Saturday</label><br/>
+							<p>For <input type="number" style="width: 30px;" data-bind="value: numReps" /> week(s) </p>
+						</div>
+					</div>
+					<div class="col-lg-6">
+						<div data-bind="visible: eventType().typeID == 0">
+							<label>Start Time</label>
+							<input class="flatpickr form-control" type="text" id="date1" placeholder="Select Date and Time..." data-bind="value: dayStart">
+							<label>End Time</label>
+						</div>
+						<label data-bind="visible: eventType().typeID == 1">Due Date</label>						
+						<label data-bind="visible: eventType().typeID == 2">Date</label>						
+						<div data-bind="visible: eventType().typeID < 3">
+							<input class="flatpickr form-control" type="text" id="date2" placeholder="Select Date and Time..." data-bind="value: day">
+						</div>
+						<div data-bind="visible: eventType().typeID > 1">
+							<label>Importance</label>
+							<select class="form-control" id="imp">
+								<option value="0">1 - Wouldn't be the end of the world if it fell through</option>
+								<option value="1">2 - Do it sooner rather than later</option>
+								<option value="2">3 - Better get this done</option>
+								<option value="3">4 - Crucial, don't mess up</option>
+								<option value="4">5 - Imperative to survival</option>
+							</select>
+						</div>
+					</div>
+				</div>
+				<button type="button" style="margin: 20px; margin-right: 0px;" class="btn btn-default" data-dismiss="modal">Cancel</button>
+				<button type="button" style="margin: 20px; float:right;" class="btn btn-primary" onclick="addEvent()">Add Event</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- View All Events -->
+	<div class="modal fade" id="allEvents" role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="myModalLabel"><b>All Events</b></h4>
+				</div>
+				<div class="modal-body panel" style="height:700px; overflow-y: scroll;">
+					<div class="list-group" id="basin">
+					</div>
+				</div>
+				<button type="button" style="margin: 20px;" class="btn btn-default" data-dismiss="modal">Cancel</button>
+				<button type="button" style="margin: 20px; float:right;" class="btn btn-primary" data-dismiss="modal">OK</button>
+			</div>
+		</div>
+	</div>
+	<script>
+		function allOfEm(arr,dump,num)
+			{
+				$(dump).html('');
+				for(i = 0;i<arr.length;i++)
+				{
+					if(arr[i]!=null)
+					{
+						if(arr[i].type == 0)
+						{
+							var startTime = new Date(arr[i].dayStart);
+							var initTime = startTime.getHours()+":"+formatToMinutes(startTime.getMinutes())+" AM";
+							if(startTime.getHours()>12)
+								initTime = (startTime.getHours() - 12)+":"+formatToMinutes(startTime.getMinutes())+" PM";
+							if(startTime.getHours() == 12)
+								initTime = (startTime.getHours())+":"+formatToMinutes(startTime.getMinutes())+" PM";
+							var endTime = new Date(arr[i].day);
+							var finTime = endTime.getHours()+":"+formatToMinutes(endTime.getMinutes())+" AM";
+							if(endTime.getHours()>12)
+								finTime = (endTime.getHours() - 12)+":"+formatToMinutes(endTime.getMinutes())+" PM";
+							if(endTime.getHours()==12)
+								finTime = (endTime.getHours())+":"+formatToMinutes(endTime.getMinutes())+" PM";
+							$(dump).append('<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-calendar" style="padding-right:20px; top:2px;"></i><b>'+arr[i].name+'</b><span class="pull-right">'+initTime+' - '+finTime+'</span></h4></button>');
+						}
+						if(arr[i].type == 1)
+						{
+							var topVal = -45;
+							if(arr[i].done)
+							{
+								completedAnEvent = true;
+								$(dump).append('<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+','+arr[i].progress+')"data-target="#eventHighlight"><h4><i class="fa fa-check-square-o" style="padding-right:20px; top:2px;"></i><b><s>'+arr[i].name+'</s></b></h4></button>');
+							}
+							else{
+								haveAnEvent = true;
+								var htmlToAdd = '<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+','+arr[i].progress+')" data-target="#eventHighlight"><h4><i class="fa fa-hourglass" style="padding-right:20px; top:2px;"></i><b>'+arr[i].name+'</b></h4>';
+								
+								if(arr[i].progress != undefined)
+								{
+									htmlToAdd += '<div class="progress" style="margin-bottom:10px;"><div class="progress-bar progress-bar-striped" role="progressbar" aria-valuenow="'+arr[i].progress+'" aria-valuemin="0" aria-valuemax="100" style="width: '+arr[i].progress+'%">'+arr[i].progress+'%</div></div>';
+									topVal = -73;
+								}
+								htmlToAdd+= '</button>';
+								if(arr[i].subtasks != undefined)
+								{
+									circles.push(arr[i].id);
+									htmlToAdd += '<div class="btn" data-toggle="collapse" data-target="#col'+num+"o"+arr[i].id+'" onclick="toggleArrow('+arr[i].id+','+num+')" style="margin-top:'+topVal+'px; padding: 5px; font-size: 18pt; position: absolute; left: '+(400+(4-num)*100)+'px;"><i id="arrow'+num+"o"+arr[i].id+'" class="fa fa-chevron-circle-down"></i></div>';
+									htmlToAdd += '<div class="collapse" id="col'+num+"o"+arr[i].id+'" style="margin:0px; padding: 0px;">';
+									for(k = 0;k<arr[i].subtasks.length;k++)
+									{
+										if(!arr[i].subtasks[k].done)
+											htmlToAdd += '<button class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i>'+arr[i].subtasks[k].tName+'</button>';
+										else
+											htmlToAdd += '<div class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px; text-align: left;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i><s>'+arr[i].subtasks[k].tName+'</s></div>';
+									}
+									htmlToAdd += '</div>';
+								}
+								$(dump).append(htmlToAdd);
+							}
+						}
+						if(arr[i].type == 2)
+						{
+							var topVal = -45;
+							if(arr[i].done)
+							{
+								completedAnEvent = true;
+								$(dump).append('<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+','+arr[i].progress+')"data-target="#eventHighlight"><h4><i class="fa fa-check-square-o" style="padding-right:20px; top:2px;"></i><b><s>'+arr[i].name+'</s></b></h4></button>');
+							}
+							else{
+								haveAnEvent = true;
+								var htmlToAdd = '<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-check-square-o" style="padding-right:20px; top:2px;"></i><b>'+arr[i].name+'</b></h4>';
+								
+								if(arr[i].progress != undefined)
+								{
+									htmlToAdd += '<div class="progress" style="margin-bottom:10px;"><div class="progress-bar progress-bar-striped" role="progressbar" aria-valuenow="'+arr[i].progress+'" aria-valuemin="0" aria-valuemax="100" style="width: '+arr[i].progress+'%">'+arr[i].progress+'%</div></div>';
+									topVal = -73;
+								}
+								htmlToAdd+= '</button>';
+								if(arr[i].subtasks != undefined)
+								{
+									circles.push(arr[i].id);
+									htmlToAdd += '<div class="btn" data-toggle="collapse" data-target="#col'+num+"o"+arr[i].id+'" onclick="toggleArrow('+arr[i].id+','+num+')" style="margin-top:'+topVal+'px; padding: 5px; font-size: 18pt; position: absolute; left: '+(400+(4-num)*100)+'px;"><i id="arrow'+num+"o"+arr[i].id+'" class="fa fa-chevron-circle-down"></i></div>';
+									htmlToAdd += '<div class="collapse" id="col'+num+"o"+arr[i].id+'" style="margin:0px; padding: 0px;">';
+									for(k = 0;k<arr[i].subtasks.length;k++)
+									{
+										if(!arr[i].subtasks[k].done)
+											htmlToAdd += '<button class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i>'+arr[i].subtasks[k].tName+'</button>';
+										else
+											htmlToAdd += '<div class="list-group-item btn btn-default" style="border-radius:0px; padding-left: 35px; text-align: left;"><i class="fa fa-check-square-o" style="font-size: 14pt; padding-right: 10px; margin-top:5px;"></i><s>'+arr[i].subtasks[k].tName+'</s></div>';
+									}
+									htmlToAdd += '</div>';
+								}
+								$(dump).append(htmlToAdd);
+							}
+						}
+						if(arr[i].type == 3)
+						{
+							$(dump).append('<button type="button" class="list-group-item" style="padding-top:5px; padding-bottom:5px;" data-toggle="modal" onclick="fillEvent('+arr[i].id+')" data-target="#eventHighlight"><h4><i class="fa fa-question" style="padding-right:20px; top:2px;"></i><b>'+arr[i].name+'</b></h4></button>');
+						}
+					}
+				}
+			}
+		function addEvent()
+		{
+				$("#eName").val("");
+				$("#eDesc").val("");
+				$("#date1").val("");
+				$("#date2").val("");
+				$("#setter").modal('hide');
+				switch(vm.eventType().typeID)
+				{
+					case 0:
+					var chosenDateStart = new Date(vm.dayStart());
+					var chosenDateEnd = new Date(vm.day());
+					if(vm.canItRepeat())
+					{
+						for(i = 0;i<vm.repeatDays().length;i++)
+						{
+							var newDateStart = new Date(chosenDateStart.getTime());
+							newDateStart.setDate((chosenDateStart.getDate() - chosenDateStart.getDay())+parseInt(vm.repeatDays()[i]));
+							var newDateEnd = new Date(chosenDateEnd.getTime());
+							newDateEnd.setDate((chosenDateEnd.getDate() - chosenDateEnd.getDay())+parseInt(vm.repeatDays()[i]));
+							for(j = 0;j<vm.numReps();j++)
+							{
+								var idNum = localStorage.getItem("eventCount");
+								idNum++;
+								var givenDateStart = new Date(newDateStart.getTime());
+								givenDateStart.setDate(newDateStart.getDate() + (7*j));
+								var givenDateEnd = new Date(newDateEnd.getTime());
+								givenDateEnd.setDate(newDateEnd.getDate() + (7*j));
+								var e = {
+									id: idNum,
+									name: vm.eventName(),
+									desc: vm.eventDesc(),
+									type: 0,
+									dayStart: givenDateStart,
+									day: givenDateEnd
+								};
+								localStorage.setItem("event"+idNum,JSON.stringify(e));
+								localStorage.setItem("eventCount",idNum);
+							}
+						}
+					}else{
+						var idNum = localStorage.getItem("eventCount");
+						idNum++;
+						var e = {
+							id: idNum,
+							name: vm.eventName(),
+							desc: vm.eventDesc(),
+							type: 0,
+							day: chosenDateEnd,
+							dayStart: chosenDateStart
+						};
+						localStorage.setItem("event"+idNum,JSON.stringify(e));
+						localStorage.setItem("eventCount",idNum);
+					}
+					break;
+					case 1:
+					var idNum = localStorage.getItem("eventCount");
+					idNum++;
+					var e = {
+						id: idNum,
+						name: vm.eventName(),
+						desc: vm.eventDesc(),
+						type: 1,
+						day: new Date(vm.day()),
+						dayStart: new Date(),
+						done: false
+					};
+					if(vm.progressBar())
+						e['progress'] = 0;
+					if(vm.sublist())
+						e['subtasks'] = vm.subtasks();
+					localStorage.setItem("event"+idNum,JSON.stringify(e));
+					localStorage.setItem("eventCount",idNum);
+					console.log(e);
+					break;
+					case 2:
+					var idNum = localStorage.getItem("eventCount");
+					idNum++;
+					var e = {
+						id: idNum,
+						name: vm.eventName(),
+						desc: vm.eventDesc(),
+						type: 2,
+						day: new Date(vm.day()),
+						importance: parseInt($("#imp").val())+1,
+						done: false
+					};
+					if(vm.progressBar())
+						e['progress'] = 0;
+					if(vm.sublist())
+						e['subtasks'] = vm.subtasks();
+					localStorage.setItem("event"+idNum,JSON.stringify(e));
+					localStorage.setItem("eventCount",idNum);
+					break;
+					case 3:
+					var idNum = localStorage.getItem("eventCount");
+					idNum++;
+					var e = {
+						id: idNum,
+						name: vm.eventName(),
+						desc: vm.eventDesc(),
+						type: 3,
+						dayStart: new Date(),
+						importance: parseInt($("#imp").val())+1
+					};
+					localStorage.setItem("event"+idNum,JSON.stringify(e));
+					localStorage.setItem("eventCount",idNum);
+					break;
+				}
+				gatherEvents();
+				setCalendar();
+		}
+		ko.cleanNode(document.body);
+		ko.applyBindings(vm);
+		flatpickr(".flatpickr", { enableTime: true });
+	</script>
+</body>
+</html>
